@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>工程カード撮影ツール</title>
+<style>
+  :root{
+    --accent:#2563eb;
+    --accent-dark:#1d4ed8;
+    --danger:#dc2626;
+    --bg:#f3f4f6;
+    --card:#ffffff;
+    --text:#1f2937;
+    --sub:#6b7280;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  header{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:var(--accent);
+    color:#fff;
+    padding:10px 16px calc(10px + env(safe-area-inset-top));
+    padding-top:calc(10px + env(safe-area-inset-top));
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
+  }
+  header h1{
+    margin:0;
+    font-size:15px;
+    font-weight:600;
+    opacity:.85;
+  }
+  #jobBanner{
+    margin-top:4px;
+    font-size:19px;
+    font-weight:700;
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  #jobBanner .count{
+    background:rgba(255,255,255,.25);
+    border-radius:999px;
+    padding:2px 12px;
+    font-size:15px;
+    white-space:nowrap;
+  }
+  main{
+    max-width:480px;
+    margin:0 auto;
+    padding:16px;
+  }
+  .card{
+    background:var(--card);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .card h2{
+    font-size:15px;
+    margin:0 0 12px;
+    color:var(--sub);
+    font-weight:600;
+  }
+  label{
+    display:block;
+    font-size:13px;
+    color:var(--sub);
+    margin-bottom:4px;
+  }
+  input[type=text], input[type=date]{
+    width:100%;
+    font-size:17px;
+    padding:10px 12px;
+    border:1px solid #d1d5db;
+    border-radius:10px;
+    margin-bottom:14px;
+    background:#fafafa;
+  }
+  .btn{
+    display:block;
+    width:100%;
+    border:none;
+    border-radius:12px;
+    padding:16px;
+    font-size:17px;
+    font-weight:700;
+    color:#fff;
+    background:var(--accent);
+    cursor:pointer;
+    text-align:center;
+  }
+  .btn:active{background:var(--accent-dark);}
+  .btn.secondary{
+    background:#fff;
+    color:var(--accent);
+    border:1.5px solid var(--accent);
+  }
+  .btn.danger{
+    background:#fff;
+    color:var(--danger);
+    border:1.5px solid var(--danger);
+  }
+  .btn[disabled]{
+    opacity:.4;
+    pointer-events:none;
+  }
+  .btn-row{
+    display:flex;
+    gap:10px;
+  }
+  .btn-row .btn{flex:1;}
+  #gallery{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-top:14px;
+  }
+  .thumb{
+    position:relative;
+    aspect-ratio:1;
+    border-radius:10px;
+    overflow:hidden;
+    background:#e5e7eb;
+  }
+  .thumb img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .thumb .num{
+    position:absolute;
+    bottom:4px;
+    left:4px;
+    background:rgba(0,0,0,.6);
+    color:#fff;
+    font-size:11px;
+    padding:1px 6px;
+    border-radius:6px;
+  }
+  .thumb .del{
+    position:absolute;
+    top:3px;
+    right:3px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:rgba(0,0,0,.6);
+    color:#fff;
+    border:none;
+    font-size:13px;
+    line-height:22px;
+    text-align:center;
+    padding:0;
+  }
+  #emptyMsg{
+    color:var(--sub);
+    font-size:14px;
+    text-align:center;
+    padding:18px 0;
+  }
+  .label-copy{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:#f1f5f9;
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:12px;
+    font-size:15px;
+  }
+  .label-copy code{
+    flex:1;
+    font-weight:700;
+    font-size:16px;
+  }
+  .copy-btn{
+    border:none;
+    background:var(--accent);
+    color:#fff;
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:13px;
+    white-space:nowrap;
+  }
+  #toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#111827;
+    color:#fff;
+    padding:10px 18px;
+    border-radius:999px;
+    font-size:14px;
+    opacity:0;
+    transition:opacity .25s;
+    pointer-events:none;
+    z-index:50;
+  }
+  #toast.show{opacity:1;}
+  .hint{
+    font-size:12.5px;
+    color:var(--sub);
+    margin-top:8px;
+    line-height:1.5;
+  }
+  #overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:40;
+    padding:24px;
+  }
+  #overlay .box{
+    background:#fff;
+    border-radius:14px;
+    padding:20px;
+    max-width:320px;
+    text-align:center;
+  }
+  #overlay .box p{font-size:15px; margin:0 0 16px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>工程カード撮影ツール</h1>
+  <div id="jobBanner">
+    <span id="jobBannerText">—</span>
+    <span class="count" id="jobBannerCount">0枚</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- STEP 1: job info -->
+  <section class="card" id="step1">
+    <h2>① 送り先・日付を入力</h2>
+    <label for="destInput">送り先名</label>
+    <input type="text" id="destInput" placeholder="例：トム物流" autocomplete="off">
+    <label for="dateInput">日付</label>
+    <input type="date" id="dateInput">
+    <button class="btn" id="startBtn">この内容で撮影を開始</button>
+  </section>
+
+  <!-- STEP 2: shooting -->
+  <section class="card" id="step2" style="display:none;">
+    <h2>② 工程カードを撮影</h2>
+    <div class="label-copy">
+      <code id="jobLabelCode">—</code>
+      <button class="copy-btn" id="copyLabelBtn">コピー</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+    <div id="liveWrap" style="display:none;">
+      <video id="camPreview" autoplay playsinline muted style="width:100%;border-radius:12px;background:#000;display:block;"></video>
+    </div>
+    <canvas id="camCanvas" style="display:none;"></canvas>
+    <button class="btn" id="shootBtn">📷 撮影する</button>
+    <p id="liveHint" class="hint" style="display:none;">画面に映っているものがそのまま撮れます。ボタン連打でそのまま連続撮影できます。</p>
+    <div id="gallery"></div>
+    <p id="emptyMsg">まだ撮影した写真はありません</p>
+    <p class="hint" id="fileModeHint">同じボタンを続けてタップすれば連続撮影できます。間違えた写真は右上の✕で削除してください。</p>
+  </section>
+
+  <!-- STEP 3: send -->
+  <section class="card" id="step3" style="display:none;">
+    <h2>③ まとめて送る</h2>
+    <button class="btn" id="sendBtn" disabled>📤 この回の分をまとめて送信</button>
+    <p class="hint" id="sendHint">共有シートが開いたら、Claudeアプリ（または連絡先）を選んで送信してください。うまく開かない場合はZIPファイルとして保存されます。</p>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn secondary" id="editJobBtn">送り先・日付を変更</button>
+      <button class="btn danger" id="resetBtn">新しいジョブを始める</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<div id="overlay">
+  <div class="box">
+    <p>撮影済みの写真が残っています。本当に新しいジョブを始めますか？（今の写真は消えます）</p>
+    <div class="btn-row">
+      <button class="btn secondary" id="overlayCancel">キャンセル</button>
+      <button class="btn danger" id="overlayConfirm">新しく始める</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var photos = []; // {blob, url, name}
+  var seq = 0;
+
+  var destInput = document.getElementById('destInput');
+  var dateInput = document.getElementById('dateInput');
+  var startBtn = document.getElementById('startBtn');
+  var step1 = document.getElementById('step1');
+  var step2 = document.getElementById('step2');
+  var step3 = document.getElementById('step3');
+  var jobBanner = document.getElementById('jobBanner');
+  var jobBannerText = document.getElementById('jobBannerText');
+  var jobBannerCount = document.getElementById('jobBannerCount');
+  var jobLabelCode = document.getElementById('jobLabelCode');
+  var copyLabelBtn = document.getElementById('copyLabelBtn');
+  var fileInput = document.getElementById('fileInput');
+  var shootBtn = document.getElementById('shootBtn');
+  var liveWrap = document.getElementById('liveWrap');
+  var camPreview = document.getElementById('camPreview');
+  var camCanvas = document.getElementById('camCanvas');
+  var liveHint = document.getElementById('liveHint');
+  var fileModeHint = document.getElementById('fileModeHint');
+  var gallery = document.getElementById('gallery');
+  var emptyMsg = document.getElementById('emptyMsg');
+  var sendBtn = document.getElementById('sendBtn');
+  var editJobBtn = document.getElementById('editJobBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var overlay = document.getElementById('overlay');
+  var overlayCancel = document.getElementById('overlayCancel');
+  var overlayConfirm = document.getElementById('overlayConfirm');
+  var toast = document.getElementById('toast');
+
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  }
+  dateInput.value = todayStr();
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  }
+
+  function dateCompact(isoDate){
+    return (isoDate || '').replace(/-/g,'');
+  }
+
+  function currentLabel(){
+    return dateCompact(dateInput.value) + (destInput.value.trim() || '送り先未入力');
+  }
+
+  function updateJobChrome(){
+    var label = currentLabel();
+    jobBannerText.textContent = label;
+    jobBannerCount.textContent = photos.length + '枚';
+    jobBanner.style.display = 'flex';
+    jobLabelCode.textContent = label;
+  }
+
+  var liveMode = false;
+  var liveStream = null;
+
+  startBtn.addEventListener('click', function(){
+    if(!destInput.value.trim()){
+      showToast('送り先名を入力してください');
+      destInput.focus();
+      return;
+    }
+    updateJobChrome();
+    step1.style.display = 'none';
+    step2.style.display = 'block';
+    step3.style.display = 'block';
+    tryStartLiveCamera();
+  });
+
+  function tryStartLiveCamera(){
+    if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+      useFileMode();
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    }).then(function(stream){
+      liveStream = stream;
+      liveMode = true;
+      camPreview.srcObject = stream;
+      liveWrap.style.display = 'block';
+      liveHint.style.display = 'block';
+      fileModeHint.style.display = 'none';
+    }).catch(function(){
+      useFileMode();
+    });
+  }
+
+  function useFileMode(){
+    liveMode = false;
+    liveWrap.style.display = 'none';
+    liveHint.style.display = 'none';
+    fileModeHint.style.display = 'block';
+  }
+
+  function stopLiveCamera(){
+    if(liveStream){
+      liveStream.getTracks().forEach(function(t){ t.stop(); });
+      liveStream = null;
+    }
+    liveMode = false;
+    liveWrap.style.display = 'none';
+    liveHint.style.display = 'none';
+  }
+
+  editJobBtn.addEventListener('click', function(){
+    stopLiveCamera();
+    step1.style.display = 'block';
+    step2.style.display = 'none';
+    step3.style.display = 'none';
+  });
+
+  copyLabelBtn.addEventListener('click', function(){
+    var text = jobLabelCode.textContent;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        showToast('コピーしました：' + text);
+      }).catch(function(){
+        showToast('コピーできませんでした');
+      });
+    } else {
+      showToast('このブラウザではコピー機能が使えません');
+    }
+  });
+
+  shootBtn.addEventListener('click', function(){
+    if(liveMode){
+      captureFromVideo();
+    } else {
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener('change', function(e){
+    var file = e.target.files && e.target.files[0];
+    fileInput.value = ''; // allow re-capture next time
+    if(!file) return;
+    resizeImage(file, 1600, function(blob){
+      addPhotoBlob(blob);
+    });
+  });
+
+  function captureFromVideo(){
+    var vw = camPreview.videoWidth, vh = camPreview.videoHeight;
+    if(!vw || !vh){ return; } // not ready yet
+    var maxDim = 1600;
+    var scale = Math.min(1, maxDim / Math.max(vw, vh));
+    var cw = Math.round(vw * scale), ch = Math.round(vh * scale);
+    camCanvas.width = cw;
+    camCanvas.height = ch;
+    var ctx = camCanvas.getContext('2d');
+    ctx.drawImage(camPreview, 0, 0, cw, ch);
+    camCanvas.toBlob(function(blob){
+      if(blob) addPhotoBlob(blob);
+    }, 'image/jpeg', 0.85);
+  }
+
+  function addPhotoBlob(blob){
+    seq += 1;
+    var name = dateCompact(dateInput.value) + '_' + destInput.value.trim() + '_' + pad(seq) + '.jpg';
+    var url = URL.createObjectURL(blob);
+    photos.push({ blob: blob, url: url, name: name });
+    renderGallery();
+    updateJobChrome();
+  }
+
+  function resizeImage(file, maxDim, cb){
+    var img = new Image();
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var cw = Math.round(w * scale), ch = Math.round(h * scale);
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, cw, ch);
+        canvas.toBlob(function(blob){
+          cb(blob || file);
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = function(){ cb(file); };
+      img.src = ev.target.result;
+    };
+    reader.onerror = function(){ cb(file); };
+    reader.readAsDataURL(file);
+  }
+
+  function renderGallery(){
+    gallery.innerHTML = '';
+    emptyMsg.style.display = photos.length ? 'none' : 'block';
+    photos.forEach(function(p, i){
+      var div = document.createElement('div');
+      div.className = 'thumb';
+      var img = document.createElement('img');
+      img.src = p.url;
+      var num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = (i+1);
+      var del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', function(){
+        URL.revokeObjectURL(p.url);
+        photos.splice(i, 1);
+        renumber();
+        renderGallery();
+        updateJobChrome();
+      });
+      div.appendChild(img);
+      div.appendChild(num);
+      div.appendChild(del);
+      gallery.appendChild(div);
+    });
+    sendBtn.disabled = photos.length === 0;
+  }
+
+  function renumber(){
+    photos.forEach(function(p, i){
+      p.name = dateCompact(dateInput.value) + '_' + destInput.value.trim() + '_' + pad(i+1) + '.jpg';
+    });
+  }
+
+  sendBtn.addEventListener('click', function(){
+    if(photos.length === 0) return;
+    var label = currentLabel();
+    var files = photos.map(function(p){
+      return new File([p.blob], p.name, { type: 'image/jpeg' });
+    });
+
+    if(navigator.canShare && navigator.canShare({ files: files }) && navigator.share){
+      navigator.share({
+        files: files,
+        title: label,
+        text: label
+      }).catch(function(err){
+        if(err && err.name === 'AbortError') return; // user cancelled, no error
+        fallbackZip(files, label);
+      });
+    } else {
+      fallbackZip(files, label);
+    }
+  });
+
+  function fallbackZip(files, label){
+    if(typeof JSZip === 'undefined'){
+      showToast('共有機能が使えません（ZIP作成も失敗しました）');
+      return;
+    }
+    var zip = new JSZip();
+    var done = 0;
+    files.forEach(function(f){
+      f.arrayBuffer().then(function(buf){
+        zip.file(f.name, buf);
+        done++;
+        if(done === files.length){
+          zip.generateAsync({ type: 'blob' }).then(function(blob){
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = label + '.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('ZIPを保存しました：' + label + '.zip');
+          });
+        }
+      });
+    });
+  }
+
+  resetBtn.addEventListener('click', function(){
+    if(photos.length > 0){
+      overlay.style.display = 'flex';
+    } else {
+      doReset();
+    }
+  });
+  overlayCancel.addEventListener('click', function(){ overlay.style.display = 'none'; });
+  overlayConfirm.addEventListener('click', function(){
+    overlay.style.display = 'none';
+    doReset();
+  });
+
+  function doReset(){
+    stopLiveCamera();
+    photos.forEach(function(p){ URL.revokeObjectURL(p.url); });
+    photos = [];
+    seq = 0;
+    destInput.value = '';
+    dateInput.value = todayStr();
+    renderGallery();
+    jobBanner.style.display = 'none';
+    step1.style.display = 'block';
+    step2.style.display = 'none';
+    step3.style.display = 'none';
+  }
+
+  window.addEventListener('beforeunload', function(e){
+    stopLiveCamera();
+    if(photos.length > 0){
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  renderGallery();
+})();
+</script>
+
+</body>
+</html>
