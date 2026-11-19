@@ -279,9 +279,10 @@
 
   <!-- STEP 3: send -->
   <section class="card" id="step3" style="display:none;">
-    <h2>③ まとめて送る</h2>
-    <button class="btn" id="sendBtn" disabled>📤 この回の分をまとめて送信</button>
-    <p class="hint" id="sendHint">共有シートが開いたら、Claudeアプリ（または連絡先）を選んで送信してください。うまく開かない場合はZIPファイルとして保存されます。</p>
+    <h2>③ まとめて保存 → Claudeに添付</h2>
+    <button class="btn" id="sendBtn" disabled>💾 ZIPで保存する</button>
+    <p class="hint">保存先は「ファイル」アプリの保存先に入ります（通常はダウンロード）。ZIPはファイルAppでタップすれば自動で展開されます。そのあと<b>今のこのチャット</b>で「＋」から添付し、展開したフォルダ内の写真をまとめて選んでください。共有シート経由だと新しいチャットが開いてしまうため、この方法が確実です。</p>
+    <button class="btn secondary" id="shareBtn" disabled style="margin-top:10px;">📤 共有シートで送る（新しいチャットが開きます）</button>
     <div class="btn-row" style="margin-top:14px;">
       <button class="btn secondary" id="editJobBtn">送り先・日付を変更</button>
       <button class="btn danger" id="resetBtn">新しいジョブを始める</button>
@@ -331,6 +332,7 @@
   var gallery = document.getElementById('gallery');
   var emptyMsg = document.getElementById('emptyMsg');
   var sendBtn = document.getElementById('sendBtn');
+  var shareBtn = document.getElementById('shareBtn');
   var editJobBtn = document.getElementById('editJobBtn');
   var resetBtn = document.getElementById('resetBtn');
   var overlay = document.getElementById('overlay');
@@ -532,6 +534,7 @@
       gallery.appendChild(div);
     });
     sendBtn.disabled = photos.length === 0;
+    shareBtn.disabled = photos.length === 0;
   }
 
   function renumber(){
@@ -546,7 +549,15 @@
     var files = photos.map(function(p){
       return new File([p.blob], p.name, { type: 'image/jpeg' });
     });
+    fallbackZip(files, label);
+  });
 
+  shareBtn.addEventListener('click', function(){
+    if(photos.length === 0) return;
+    var label = currentLabel();
+    var files = photos.map(function(p){
+      return new File([p.blob], p.name, { type: 'image/jpeg' });
+    });
     if(navigator.canShare && navigator.canShare({ files: files }) && navigator.share){
       navigator.share({
         files: files,
@@ -554,10 +565,10 @@
         text: label
       }).catch(function(err){
         if(err && err.name === 'AbortError') return; // user cancelled, no error
-        fallbackZip(files, label);
+        showToast('共有できませんでした');
       });
     } else {
-      fallbackZip(files, label);
+      showToast('この環境では共有シートが使えません');
     }
   });
 
