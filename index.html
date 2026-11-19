@@ -84,8 +84,40 @@
     padding:10px 12px;
     border:1px solid #d1d5db;
     border-radius:10px;
-    margin-bottom:14px;
     background:#fafafa;
+  }
+  .input-mic-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .input-mic-row input{
+    flex:1;
+    margin-bottom:0;
+  }
+  .mic-btn{
+    flex:0 0 auto;
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    border:1.5px solid var(--accent);
+    background:#fff;
+    color:var(--accent);
+    font-size:19px;
+    line-height:1;
+    padding:0;
+  }
+  .mic-btn.listening{
+    background:var(--danger);
+    border-color:var(--danger);
+    color:#fff;
+    animation:pulse 1s infinite;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(220,38,38,.5);}
+    70%{box-shadow:0 0 0 10px rgba(220,38,38,0);}
+    100%{box-shadow:0 0 0 0 rgba(220,38,38,0);}
   }
   .btn{
     display:block;
@@ -252,9 +284,16 @@
   <section class="card" id="step1">
     <h2>① 送り先・日付を入力</h2>
     <label for="destInput">送り先名</label>
-    <input type="text" id="destInput" placeholder="例：トム物流" autocomplete="off">
+    <div class="input-mic-row">
+      <input type="text" id="destInput" placeholder="例：トム物流" autocomplete="off">
+      <button type="button" class="mic-btn" id="destMicBtn" aria-label="送り先名を音声入力">🎤</button>
+    </div>
     <label for="dateInput">日付</label>
-    <input type="date" id="dateInput">
+    <div class="input-mic-row">
+      <input type="date" id="dateInput">
+      <button type="button" class="mic-btn" id="dateMicBtn" aria-label="日付を音声入力">🎤</button>
+    </div>
+    <p class="hint" id="micHint">マイクボタンを押して話すと自動入力されます（例：「トム物流」「今日」「11月20日」）。</p>
     <button class="btn" id="startBtn">この内容で撮影を開始</button>
   </section>
 
@@ -313,6 +352,9 @@
 
   var destInput = document.getElementById('destInput');
   var dateInput = document.getElementById('dateInput');
+  var destMicBtn = document.getElementById('destMicBtn');
+  var dateMicBtn = document.getElementById('dateMicBtn');
+  var micHint = document.getElementById('micHint');
   var startBtn = document.getElementById('startBtn');
   var step1 = document.getElementById('step1');
   var step2 = document.getElementById('step2');
@@ -368,6 +410,105 @@
     jobBannerCount.textContent = photos.length + '枚';
     jobBanner.style.display = 'flex';
     jobLabelCode.textContent = label;
+  }
+
+  // --- Voice input (Web Speech API) ---
+  var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function toHalfWidthDigits(s){
+    return s.replace(/[０-９]/g, function(ch){
+      return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+    });
+  }
+
+  function setupMic(btn, onText){
+    if(!SpeechRecognitionCtor){
+      btn.style.display = 'none';
+      return;
+    }
+    var recog = null;
+    var listening = false;
+    btn.addEventListener('click', function(){
+      if(listening){
+        if(recog) recog.stop();
+        return;
+      }
+      recog = new SpeechRecognitionCtor();
+      recog.lang = 'ja-JP';
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      listening = true;
+      btn.classList.add('listening');
+      recog.onresult = function(e){
+        var text = e.results[0][0].transcript;
+        onText(toHalfWidthDigits(text).trim());
+      };
+      recog.onerror = function(e){
+        if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+          showToast('マイクの使用が許可されていません');
+        } else if(e.error !== 'no-speech' && e.error !== 'aborted'){
+          showToast('音声を認識できませんでした');
+        }
+      };
+      recog.onend = function(){
+        listening = false;
+        btn.classList.remove('listening');
+      };
+      try{
+        recog.start();
+      }catch(err){
+        listening = false;
+        btn.classList.remove('listening');
+      }
+    });
+  }
+
+  setupMic(destMicBtn, function(text){
+    destInput.value = text.replace(/[。、\s]+$/g, '');
+    showToast('送り先名：' + destInput.value);
+  });
+
+  setupMic(dateMicBtn, function(text){
+    var parsed = parseSpokenDate(text);
+    if(parsed){
+      dateInput.value = parsed;
+      showToast('日付：' + parsed);
+    } else {
+      showToast('認識：「' + text + '」→ 日付にできませんでした。手入力してください');
+    }
+  });
+
+  if(!SpeechRecognitionCtor){
+    micHint.textContent = 'この端末では音声入力ボタンが使えません。キーボード表示時のマイクアイコンでの入力をお使いください。';
+  }
+
+  function parseSpokenDate(text){
+    var now = new Date();
+    var y = now.getFullYear();
+
+    if(/今日|きょう/.test(text)){
+      return todayStr();
+    }
+    if(/明日|あした/.test(text)){
+      var d = new Date(now.getTime() + 86400000);
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+    }
+    if(/昨日|きのう/.test(text)){
+      var d2 = new Date(now.getTime() - 86400000);
+      return d2.getFullYear() + '-' + pad(d2.getMonth()+1) + '-' + pad(d2.getDate());
+    }
+
+    // 2026年11月20日 / 11月20日 / 2026/11/20 / 11/20 / 11-20
+    var m = text.match(/(?:(\d{4})\s*年)?\s*(\d{1,2})\s*[月\/\-]\s*(\d{1,2})\s*日?/);
+    if(m){
+      var yy = m[1] ? parseInt(m[1], 10) : y;
+      var mm = parseInt(m[2], 10);
+      var dd = parseInt(m[3], 10);
+      if(mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31){
+        return yy + '-' + pad(mm) + '-' + pad(dd);
+      }
+    }
+    return null;
   }
 
   var liveMode = false;
