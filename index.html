@@ -513,6 +513,8 @@
 
   var liveMode = false;
   var liveStream = null;
+  var liveTrack = null;
+  var imageCapture = null;
 
   startBtn.addEventListener('click', function(){
     if(!destInput.value.trim()){
@@ -532,8 +534,10 @@
       useFileMode();
       return;
     }
+    // プレビュー用ストリームは画質が低いので大きめにリクエストしつつ、
+    // 実際の撮影は可能な限り ImageCapture.takePhoto() の静止画撮影を使う（下の captureFromVideo 参照）。
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
       audio: false
     }).then(function(stream){
       liveStream = stream;
@@ -542,6 +546,17 @@
       liveWrap.style.display = 'block';
       liveHint.style.display = 'block';
       fileModeHint.style.display = 'none';
+
+      liveTrack = stream.getVideoTracks()[0] || null;
+      if(liveTrack && window.ImageCapture){
+        try{
+          imageCapture = new ImageCapture(liveTrack);
+        }catch(e){
+          imageCapture = null;
+        }
+      } else {
+        imageCapture = null;
+      }
     }).catch(function(){
       useFileMode();
     });
@@ -559,6 +574,8 @@
       liveStream.getTracks().forEach(function(t){ t.stop(); });
       liveStream = null;
     }
+    liveTrack = null;
+    imageCapture = null;
     liveMode = false;
     liveWrap.style.display = 'none';
     liveHint.style.display = 'none';
@@ -596,15 +613,33 @@
     var file = e.target.files && e.target.files[0];
     fileInput.value = ''; // allow re-capture next time
     if(!file) return;
-    resizeImage(file, 1600, function(blob){
+    resizeImage(file, 2400, function(blob){
       addPhotoBlob(blob);
     });
   });
 
   function captureFromVideo(){
+    // 1) ImageCapture.takePhoto() が使えればこちらを優先。
+    //    プレビュー映像（動画フレーム）ではなく、カメラの静止画撮影機能を直接呼ぶため、
+    //    同じ端末でも解像度・ピント・露出がはっきり良くなる。
+    if(imageCapture && imageCapture.takePhoto){
+      imageCapture.takePhoto().then(function(blob){
+        downscaleIfNeeded(blob, 2400, 0.92, function(outBlob){
+          addPhotoBlob(outBlob);
+        });
+      }).catch(function(){
+        captureFromVideoFrame();
+      });
+      return;
+    }
+    captureFromVideoFrame();
+  }
+
+  // フォールバック：ImageCapture が無い端末/ブラウザ向けの従来方式（動画フレームのスナップショット）。
+  function captureFromVideoFrame(){
     var vw = camPreview.videoWidth, vh = camPreview.videoHeight;
     if(!vw || !vh){ return; } // not ready yet
-    var maxDim = 1600;
+    var maxDim = 2400;
     var scale = Math.min(1, maxDim / Math.max(vw, vh));
     var cw = Math.round(vw * scale), ch = Math.round(vh * scale);
     camCanvas.width = cw;
@@ -613,7 +648,35 @@
     ctx.drawImage(camPreview, 0, 0, cw, ch);
     camCanvas.toBlob(function(blob){
       if(blob) addPhotoBlob(blob);
-    }, 'image/jpeg', 0.85);
+    }, 'image/jpeg', 0.92);
+  }
+
+  // ImageCapture で撮れた写真は数千px級になることがあるため、必要な時だけ縮小する。
+  function downscaleIfNeeded(blob, maxDim, quality, cb){
+    var img = new Image();
+    var url = URL.createObjectURL(blob);
+    img.onload = function(){
+      URL.revokeObjectURL(url);
+      var w = img.width, h = img.height;
+      if(Math.max(w, h) <= maxDim){
+        cb(blob);
+        return;
+      }
+      var scale = maxDim / Math.max(w, h);
+      var cw = Math.round(w * scale), ch = Math.round(h * scale);
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      canvas.toBlob(function(outBlob){
+        cb(outBlob || blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = function(){
+      URL.revokeObjectURL(url);
+      cb(blob);
+    };
+    img.src = url;
   }
 
   function addPhotoBlob(blob){
@@ -639,7 +702,7 @@
         ctx.drawImage(img, 0, 0, cw, ch);
         canvas.toBlob(function(blob){
           cb(blob || file);
-        }, 'image/jpeg', 0.85);
+        }, 'image/jpeg', 0.92);
       };
       img.onerror = function(){ cb(file); };
       img.src = ev.target.result;
